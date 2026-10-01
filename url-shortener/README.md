@@ -1,17 +1,21 @@
-# 🔗 URL Shortener
+# 🔗 URL Shortener with Authentication
 
-A lightweight and fast **URL Shortener service** built with **Node.js**, **Express.js**, **MongoDB**, and **EJS**. It allows users to convert long URLs into compact 8-character unique links, redirect seamlessly to the original destinations, and track total visits with detailed timestamp analytics.
+A full-stack **URL Shortener Application** built with **Node.js**, **Express.js**, **MongoDB**, and **EJS**, featuring secure **cookie-based user authentication and authorization**. Users can register, log in, generate compact 8-character unique short links, view their personalized dashboard with URL history, and track real-time click analytics.
 
 ---
 
 ## 🚀 Features
 
-- ✂️ **Custom Short URLs**: Generates unique, compact 8-character nano IDs for long URLs.
-- 🔁 **Duplicate Prevention**: Detects existing URLs in the database to prevent duplicate entries.
-- 📊 **Visit Analytics & Tracking**: Records visit history and timestamp for each click.
-- ⚡ **Instant Redirection**: Fast redirection to the original target URL.
-- 🎨 **Server-Side Rendered UI**: Clean interface built with EJS for generating links and viewing live click metrics.
-- 🔌 **RESTful API**: Supports both web UI form interactions and JSON API endpoints.
+- 🔐 **User Authentication & Authorization**: Complete Sign Up and Login flow with cookie-based session management (`uuid` & `cookie-parser`).
+- 👤 **Personalized User Dashboard**: Authenticated users can view and manage only the URLs they have created.
+- ✂️ **Unique Short URL Generation**: Generates 8-character unique short IDs using `nanoid`.
+- 🔁 **Duplicate Detection**: Prevents duplicate entries if a user has already shortened the target URL.
+- 📊 **Visit Analytics & Tracking**: Tracks total clicks and logs timestamps for every redirection.
+- ⚡ **Fast Redirection**: Instant 302 redirection to the target destination.
+- 🛡️ **Protected Routes & Middlewares**:
+  - `restrictToLoggedinUseOnly`: Restricts shortening and dashboard access to authenticated users.
+  - `checkAuth`: Inlines user context for static pages.
+- 🎨 **Server-Side Rendered UI**: Interactive web interface rendered using **EJS** (Home, Login, and Sign Up views).
 
 ---
 
@@ -21,6 +25,7 @@ A lightweight and fast **URL Shortener service** built with **Node.js**, **Expre
 - **Web Framework:** [Express.js](https://expressjs.com/) (v5)
 - **Database & ODM:** [MongoDB](https://www.mongodb.com/) with [Mongoose](https://mongoosejs.com/)
 - **Template Engine:** [EJS](https://ejs.co/)
+- **Session & Auth Management:** `uuid` & `cookie-parser`
 - **ID Generator:** [NanoID](https://github.com/ai/nanoid)
 - **Dev Tooling:** [Nodemon](https://nodemon.io/)
 
@@ -31,32 +36,75 @@ A lightweight and fast **URL Shortener service** built with **Node.js**, **Expre
 ```text
 url-shortener/
 ├── controllers/
-│   └── url.js            # Controller logic for URL shortening, redirect, & analytics
+│   ├── url.js            # Controller for generating short URLs, redirection, & analytics
+│   └── user.js           # Controller for user signup and login
+├── middlewares/
+│   └── auth.js           # Route protection & authentication middleware
 ├── models/
-│   └── url.js            # Mongoose schema for shortId, redirectURL, & visitHistory
+│   ├── url.js            # Mongoose schema for URLs (shortId, redirectURL, visitHistory, createdBy)
+│   └── user.js           # Mongoose schema for Users (name, email, password)
 ├── routes/
-│   ├── staticRouter.js   # Route for rendering the home view (GET /)
-│   └── url.js            # Routes for URL operations (POST /url, GET /url/:shortId, GET /url/analytics/:shortId)
+│   ├── staticRouter.js   # Routes for rendering UI pages (Home, Login, Sign Up)
+│   ├── url.js            # Routes for URL operations (POST /url, GET /url/:shortId, GET /url/analytics/:shortId)
+│   └── user.js           # Routes for user actions (POST /user/signup, POST /user/login)
+├── service/
+│   └── auth.js           # In-memory session store mapping session IDs to users
 ├── views/
-│   └── home.ejs          # EJS frontend template
+│   ├── home.ejs          # Main dashboard view with URL creation form and table
+│   ├── login.ejs         # User login view
+│   └── signup.ejs        # User registration view
 ├── connection.js         # MongoDB connection module
-├── index.js              # Application entry point & server setup
-├── package.json          # Dependencies and scripts
+├── index.js              # Application entry point & Express server setup
+├── package.json          # Project dependencies and npm scripts
 └── README.md             # Project documentation
 ```
 
 ---
 
-## 📡 API Endpoints & Routes
+## 🔐 Authentication & Session Flow
 
-| Method | Endpoint | Description | Response Type |
+1. **Sign Up (`POST /user/signup`)**:
+   - Saves new user credentials (`name`, `email`, `password`) in MongoDB.
+   - Redirects to `/`.
+
+2. **Login (`POST /user/login`)**:
+   - Validates user credentials against MongoDB.
+   - Generates a unique UUID `sessionId`.
+   - Stores `sessionId -> user` mapping in the server's session store (`service/auth.js`).
+   - Sets a `uid` cookie in the user's browser and redirects to the home dashboard.
+
+3. **Route Protection (`middlewares/auth.js`)**:
+   - `restrictToLoggedinUseOnly`: Reads `req.cookies.uid`, resolves user from session store. If missing or invalid, redirects to `/login`.
+   - `checkAuth`: Checks for `req.cookies.uid` and populates `req.user` without forcing a redirect.
+
+---
+
+## 📡 API & Route Reference
+
+### 1. View & Navigation Routes
+
+| Method | Route | Access | Description |
 | :--- | :--- | :--- | :--- |
-| **GET** | `/` | Renders the home page with the input form and list of all URLs | HTML / EJS |
-| **POST** | `/url` | Accepts `{ url: "https://example.com" }` and generates a short ID | HTML / EJS |
-| **GET** | `/url/:shortId` | Redirects to the original URL and records click timestamp | 302 Redirect |
-| **GET** | `/url/analytics/:shortId` | Returns total clicks and visit history timestamp array | JSON |
+| **GET** | `/` | Protected | Renders Home dashboard with user's shortened URLs |
+| **GET** | `/login` | Public | Renders the Login page |
+| **GET** | `/signup` | Public | Renders the Sign Up page |
 
-### Example Analytics Response (`GET /url/analytics/:shortId`)
+### 2. User Authentication Routes
+
+| Method | Route | Description | Action |
+| :--- | :--- | :--- | :--- |
+| **POST** | `/user/signup` | Registers a new user account | Redirects to `/` |
+| **POST** | `/user/login` | Authenticates user & sets session cookie `uid` | Redirects to `/` |
+
+### 3. URL Operations & Analytics Routes
+
+| Method | Endpoint | Access | Description | Response |
+| :--- | :--- | :--- | :--- | :--- |
+| **POST** | `/url` | Protected | Creates a new short URL linked to the logged-in user | HTML / EJS |
+| **GET** | `/url/:shortId` | Public | Redirects to original URL and records click timestamp | 302 Redirect |
+| **GET** | `/url/analytics/:shortId` | Public | Returns total click count and timestamp history | JSON |
+
+#### Example Analytics JSON Response (`GET /url/analytics/:shortId`)
 
 ```json
 {
@@ -71,20 +119,68 @@ url-shortener/
 
 ---
 
+## 📝 Database Schemas
+
+### User Schema (`models/user.js`)
+
+```javascript
+const userSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  password: {
+    type: String,
+    required: true,
+  }
+}, { timestamps: true });
+```
+
+### URL Schema (`models/url.js`)
+
+```javascript
+const urlSchema = new mongoose.Schema({
+  shortId: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  redirectURL: {
+    type: String,
+    required: true,
+  },
+  visitHistory: [
+    {
+      timestamp: { type: Number }
+    }
+  ],
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "users"
+  }
+}, { timestamps: true });
+```
+
+---
+
 ## ⚙️ Getting Started
 
 ### Prerequisites
 
-Make sure you have the following installed on your machine:
-- [Node.js](https://nodejs.org/) (v16 or higher recommended)
-- [MongoDB](https://www.mongodb.com/try/download/community) installed and running locally on port `27017`
+- [Node.js](https://nodejs.org/) (v16.x or higher)
+- [MongoDB](https://www.mongodb.com/try/download/community) installed and running locally on `mongodb://127.0.0.1:27017`
 
-### Installation
+### Installation & Setup
 
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/MoreVishwajeet/url-shortener-flask.git
-   cd url-shortener-flask
+   cd url-shortener
    ```
 
 2. **Install dependencies:**
@@ -93,54 +189,30 @@ Make sure you have the following installed on your machine:
    ```
 
 3. **Start MongoDB:**
-   Ensure your local MongoDB daemon is active:
+   Ensure MongoDB service is running:
    ```bash
-   # Windows (via Services or mongod)
    mongod
    ```
 
-4. **Run the server:**
+4. **Start the application:**
    ```bash
    npm start
    ```
 
-5. **Access the application:**
-   Open your browser and navigate to:
+5. **Open in Browser:**
+   Navigate to:
    ```text
    http://localhost:8001
    ```
 
 ---
 
-## 📝 Schema Reference
-
-```javascript
-const urlSchema = new mongoose.Schema({
-  shortId: {
-    type: String,
-    required: true,
-    unique: true
-  },
-  redirectURL: {
-    type: String,
-    required: true
-  },
-  visitHistory: [
-    {
-      timestamp: { type: Number }
-    }
-  ]
-}, { timestamps: true });
-```
-
----
-
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to check the issues page or submit a PR.
+Contributions, issues, and feature requests are welcome! Feel free to open an issue or create a pull request.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the [ISC License](LICENSE) (or MIT).
+This project is licensed under the [ISC License](package.json).
